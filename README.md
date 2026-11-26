@@ -4,7 +4,7 @@ Enkel helsesjekk for utviklerteamet (Martin, Linn, Silje, Kåre, Olav).
 
 - `index.html` – skjema med 10 spørsmål (skala 1–5)
 - `dashboard.html` – oversikt over svar og teamfornøydhet (Chart.js)
-- `data.js` – spørsmål og pregenererte svar
+- `data.js` – spørsmål og pregenererte svar (8 ukentlige runder)
 
 Ingen database ennå. Svar fra skjemaet lagres kun i nettleseren (localStorage).
 

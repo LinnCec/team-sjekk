@@ -8,6 +8,7 @@
   --accent: #257de0;
   --accent-soft: #e8f1fc;
   --grid: #ececea;
+  --series-1: #257de0; --series-2: #f47230; --series-3: #00b894; --series-4: #f2a600; --series-5: #ee7fac;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -20,6 +21,7 @@
     --accent: #338ced;
     --accent-soft: #1d2a3a;
     --grid: #2a2a2a;
+    --series-1: #338ced; --series-2: #e76624; --series-3: #00a888; --series-4: #d28e05; --series-5: #e24d8b;
   }
 }
 :root[data-theme="dark"] {
@@ -32,6 +34,7 @@
   --accent: #338ced;
   --accent-soft: #1d2a3a;
   --grid: #2a2a2a;
+  --series-1: #338ced; --series-2: #e76624; --series-3: #00a888; --series-4: #d28e05; --series-5: #e24d8b;
 }
 
 * { box-sizing: border-box; }
@@ -113,3 +116,9 @@ td.cell { font-weight: 600; font-variant-numeric: tabular-nums; }
 .comments p { margin: 0 0 10px; }
 .comments b { display: inline-block; min-width: 60px; }
 .note { font-size: 13px; color: var(--text-2); }
+
+.filters { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.filters label { font-weight: 600; }
+.filters select, .card-head select { width: auto; padding: 8px 10px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.card-head h3 { margin: 0; }

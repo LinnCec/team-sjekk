@@ -16,10 +16,15 @@
   </header>
   <main class="wrap">
     <h2>Dashboard</h2>
-    <p class="lead">Svar fra Martin, Linn, Silje, Kåre og Olav. Skala 1–5.</p>
+    <p class="lead">Svar fra Martin, Linn, Silje, Kåre og Olav. Skala 1–5. Ukentlige runder.</p>
+
+    <div class="filters">
+      <label for="runde">Runde</label>
+      <select id="runde"></select>
+    </div>
 
     <div class="tiles">
-      <div class="card tile"><div class="label">Teamfornøydhet</div><div class="value" id="t-score"></div><div class="sub">snitt av alle svar</div></div>
+      <div class="card tile"><div class="label">Teamfornøydhet</div><div class="value" id="t-score"></div><div class="sub" id="t-score-sub">snitt av alle svar</div></div>
       <div class="card tile"><div class="label">Positive svar</div><div class="value" id="t-pos"></div><div class="sub">andel svar 4 eller 5</div></div>
       <div class="card tile"><div class="label">Sterkest</div><div class="value" style="font-size:20px" id="t-best"></div><div class="sub" id="t-best-v"></div></div>
       <div class="card tile"><div class="label">Svakest</div><div class="value" style="font-size:20px" id="t-worst"></div><div class="sub" id="t-worst-v"></div></div>
@@ -31,7 +36,20 @@
     </div>
 
     <div class="card">
-      <h3>Alle svar</h3>
+      <div class="card-head">
+        <h3>Utvikling over tid</h3>
+        <select id="trend-tema" aria-label="Velg tema"></select>
+      </div>
+      <div class="chart-box"><canvas id="c-trend"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>Snitt per person over tid</h3>
+      <div class="chart-box"><canvas id="c-trend-person"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>Alle svar <span class="note" id="tbl-runde"></span></h3>
       <div class="table-wrap"><table id="tbl"></table></div>
       <p class="note" id="local-note"></p>
     </div>
@@ -44,22 +62,11 @@
 
   <script src="data.js"></script>
   <script>
-    const answers = getAnswers();
     const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
     const fmt = n => n.toFixed(1).replace(".", ",");
-
-    const allValues = PEOPLE.flatMap(p => answers[p].svar);
-    const perTema = QUESTIONS.map((q, i) => avg(PEOPLE.map(p => answers[p].svar[i])));
-    const perPerson = PEOPLE.map(p => avg(answers[p].svar));
-
-    document.getElementById("t-score").textContent = fmt(avg(allValues)) + " / 5";
-    document.getElementById("t-pos").textContent = Math.round(100 * allValues.filter(v => v >= 4).length / allValues.length) + " %";
-    const best = perTema.indexOf(Math.max(...perTema));
-    const worst = perTema.indexOf(Math.min(...perTema));
-    document.getElementById("t-best").textContent = QUESTIONS[best].tema;
-    document.getElementById("t-best-v").textContent = "snitt " + fmt(perTema[best]);
-    document.getElementById("t-worst").textContent = QUESTIONS[worst].tema;
-    document.getElementById("t-worst-v").textContent = "snitt " + fmt(perTema[worst]);
+    const datoTekst = s => new Date(s + "T12:00:00").toLocaleDateString("no-NO", { day: "numeric", month: "short" });
+    const ukeTekst = (s, i) => `Uke ${i + 1} (${datoTekst(s)})`;
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
     // Farger fra CSS-variabler (lys/mørk modus)
     const css = getComputedStyle(document.documentElement);
@@ -67,51 +74,116 @@
     Chart.defaults.color = v("--text-2");
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
     Chart.defaults.borderColor = v("--grid");
+    const accent = v("--accent");
+    const seriesColors = [1, 2, 3, 4, 5].map(i => v("--series-" + i));
+
+    // Alle runder (siste inkluderer lokale svar fra skjemaet)
+    const allRounds = ROUNDS.map((r, i) => getAnswers(i));
+    const labels = ROUNDS.map(r => datoTekst(r.dato));
+
+    // ---- Rundevelger ----
+    const rundeSel = document.getElementById("runde");
+    ROUNDS.forEach((r, i) => rundeSel.add(new Option(ukeTekst(r.dato, i) + (i === ROUNDS.length - 1 ? " – siste" : ""), i)));
+    rundeSel.value = ROUNDS.length - 1;
 
     const barOpts = (horizontal) => ({
       indexAxis: horizontal ? "y" : "x",
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => "Snitt: " + fmt(c.raw) } }
-      },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => "Snitt: " + fmt(c.raw) } } },
       scales: {
         [horizontal ? "x" : "y"]: { min: 0, max: 5, ticks: { stepSize: 1 } },
         [horizontal ? "y" : "x"]: { grid: { display: false } }
       }
     });
-    const barStyle = { backgroundColor: v("--accent"), borderRadius: 4, borderSkipped: "start", barPercentage: 0.7 };
-
-    new Chart(document.getElementById("c-tema"), {
-      type: "bar",
-      data: { labels: QUESTIONS.map(q => q.tema), datasets: [{ data: perTema, ...barStyle }] },
-      options: barOpts(true)
+    const barStyle = { backgroundColor: accent, borderRadius: 4, borderSkipped: "start", barPercentage: 0.7 };
+    const temaChart = new Chart(document.getElementById("c-tema"), {
+      type: "bar", data: { labels: QUESTIONS.map(q => q.tema), datasets: [{ data: [], ...barStyle }] }, options: barOpts(true)
     });
-    new Chart(document.getElementById("c-person"), {
-      type: "bar",
-      data: { labels: PEOPLE, datasets: [{ data: perPerson, ...barStyle, barPercentage: 0.5 }] },
-      options: barOpts(false)
+    const personChart = new Chart(document.getElementById("c-person"), {
+      type: "bar", data: { labels: PEOPLE, datasets: [{ data: [], ...barStyle, barPercentage: 0.5 }] }, options: barOpts(false)
     });
 
-    // Tabell (varmekart i én fargetone)
-    const tbl = document.getElementById("tbl");
-    const accent = v("--accent");
-    const shade = n => `color-mix(in srgb, ${accent} ${Math.round((n - 1) / 4 * 70 + 8)}%, transparent)`;
-    let html = "<thead><tr><th>Tema</th>" + PEOPLE.map(p => `<th>${p}${answers[p].lokal ? " *" : ""}</th>`).join("") + "<th>Snitt</th></tr></thead><tbody>";
-    QUESTIONS.forEach((q, i) => {
-      html += `<tr><td title="${q.tekst}">${q.tema}</td>` +
-        PEOPLE.map(p => { const n = answers[p].svar[i]; return `<td class="cell" style="background:${shade(n)}">${n}</td>`; }).join("") +
-        `<td class="cell">${fmt(perTema[i])}</td></tr>`;
-    });
-    html += "<tr><td><b>Snitt</b></td>" + perPerson.map(n => `<td class="cell">${fmt(n)}</td>`).join("") + `<td class="cell">${fmt(avg(allValues))}</td></tr></tbody>`;
-    tbl.innerHTML = html;
-    if (PEOPLE.some(p => answers[p].lokal))
-      document.getElementById("local-note").textContent = "* Svar sendt inn fra skjemaet i denne nettleseren.";
+    function renderRound(idx) {
+      const answers = allRounds[idx];
+      const allValues = PEOPLE.flatMap(p => answers[p].svar);
+      const perTema = QUESTIONS.map((q, i) => avg(PEOPLE.map(p => answers[p].svar[i])));
+      const perPerson = PEOPLE.map(p => avg(answers[p].svar));
+      const score = avg(allValues);
 
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    document.getElementById("comments").innerHTML = PEOPLE
-      .filter(p => answers[p].kommentar)
-      .map(p => `<p><b>${p}</b> ${esc(answers[p].kommentar)}</p>`).join("") || '<p class="note">Ingen kommentarer.</p>';
+      let delta = "snitt av alle svar";
+      if (idx > 0) {
+        const prev = avg(PEOPLE.flatMap(p => allRounds[idx - 1][p].svar));
+        const d = score - prev;
+        delta = (d > 0.05 ? "▲ " : d < -0.05 ? "▼ " : "● ") + (d >= 0 ? "+" : "−") + fmt(Math.abs(d)) + " fra uken før";
+      }
+      document.getElementById("t-score").textContent = fmt(score) + " / 5";
+      document.getElementById("t-score-sub").textContent = delta;
+      document.getElementById("t-pos").textContent = Math.round(100 * allValues.filter(x => x >= 4).length / allValues.length) + " %";
+      const best = perTema.indexOf(Math.max(...perTema));
+      const worst = perTema.indexOf(Math.min(...perTema));
+      document.getElementById("t-best").textContent = QUESTIONS[best].tema;
+      document.getElementById("t-best-v").textContent = "snitt " + fmt(perTema[best]);
+      document.getElementById("t-worst").textContent = QUESTIONS[worst].tema;
+      document.getElementById("t-worst-v").textContent = "snitt " + fmt(perTema[worst]);
+
+      temaChart.data.datasets[0].data = perTema; temaChart.update();
+      personChart.data.datasets[0].data = perPerson; personChart.update();
+
+      // Tabell (varmekart i én fargetone)
+      const shade = n => `color-mix(in srgb, ${accent} ${Math.round((n - 1) / 4 * 70 + 8)}%, transparent)`;
+      let html = "<thead><tr><th>Tema</th>" + PEOPLE.map(p => `<th>${p}${answers[p].lokal ? " *" : ""}</th>`).join("") + "<th>Snitt</th></tr></thead><tbody>";
+      QUESTIONS.forEach((q, i) => {
+        html += `<tr><td title="${q.tekst}">${q.tema}</td>` +
+          PEOPLE.map(p => { const n = answers[p].svar[i]; return `<td class="cell" style="background:${shade(n)}">${n}</td>`; }).join("") +
+          `<td class="cell">${fmt(perTema[i])}</td></tr>`;
+      });
+      html += "<tr><td><b>Snitt</b></td>" + perPerson.map(n => `<td class="cell">${fmt(n)}</td>`).join("") + `<td class="cell">${fmt(score)}</td></tr></tbody>`;
+      document.getElementById("tbl").innerHTML = html;
+      document.getElementById("tbl-runde").textContent = "– " + ukeTekst(ROUNDS[idx].dato, idx);
+      document.getElementById("local-note").textContent = PEOPLE.some(p => answers[p].lokal)
+        ? "* Svar sendt inn fra skjemaet i denne nettleseren." : "";
+
+      document.getElementById("comments").innerHTML = PEOPLE
+        .filter(p => answers[p].kommentar)
+        .map(p => `<p><b>${p}</b> ${esc(answers[p].kommentar)}</p>`).join("") || '<p class="note">Ingen kommentarer denne uken.</p>';
+    }
+    rundeSel.addEventListener("change", () => renderRound(Number(rundeSel.value)));
+    renderRound(ROUNDS.length - 1);
+
+    // ---- Utvikling over tid (team) ----
+    const temaSel = document.getElementById("trend-tema");
+    temaSel.add(new Option("Teamfornøydhet totalt", "all"));
+    QUESTIONS.forEach((q, i) => temaSel.add(new Option(q.tema, i)));
+    const teamSeries = key => allRounds.map(a =>
+      key === "all" ? avg(PEOPLE.flatMap(p => a[p].svar)) : avg(PEOPLE.map(p => a[p].svar[key])));
+    const lineOpts = (legend) => ({
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: legend, position: "bottom", labels: { usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.raw)}` } }
+      },
+      scales: { y: { min: 1, max: 5, ticks: { stepSize: 1 } }, x: { grid: { display: false } } }
+    });
+    const lineStyle = c => ({ borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, cubicInterpolationMode: "monotone" });
+    const trendChart = new Chart(document.getElementById("c-trend"), {
+      type: "line",
+      data: { labels, datasets: [{ label: "Teamfornøydhet totalt", data: teamSeries("all"), ...lineStyle(accent) }] },
+      options: lineOpts(false)
+    });
+    temaSel.addEventListener("change", () => {
+      const k = temaSel.value === "all" ? "all" : Number(temaSel.value);
+      trendChart.data.datasets[0].data = teamSeries(k);
+      trendChart.data.datasets[0].label = temaSel.options[temaSel.selectedIndex].text;
+      trendChart.update();
+    });
+
+    // ---- Per person over tid ----
+    new Chart(document.getElementById("c-trend-person"), {
+      type: "line",
+      data: { labels, datasets: PEOPLE.map((p, i) => ({ label: p, data: allRounds.map(a => avg(a[p].svar)), ...lineStyle(seriesColors[i]) })) },
+      options: lineOpts(true)
+    });
   </script>
 </body>
 </html>
