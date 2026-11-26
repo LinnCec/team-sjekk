@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Team helsesjekk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Team helsesjekk</h1>
+      <nav><a href="index.html" class="active">Skjema</a><a href="dashboard.html">Dashboard</a></nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <h2>Månedlig helsesjekk</h2>
+    <p class="lead">10 korte spørsmål. Svar fra 1 (helt uenig) til 5 (helt enig).</p>
+
+    <form id="form" class="card">
+      <label class="field" for="navn">Hvem er du?</label>
+      <select id="navn" required>
+        <option value="">Velg navn</option>
+      </select>
+      <div id="questions" style="margin-top:16px"></div>
+      <label class="field" for="kommentar" style="margin-top:16px">Kommentar (valgfritt)</label>
+      <textarea id="kommentar" placeholder="Noe du vil dele med teamet?"></textarea>
+      <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap">
+        <button type="submit">Send inn</button>
+        <button type="button" class="secondary" id="nullstill">Nullstill lokale svar</button>
+      </div>
+      <div class="msg" id="msg"></div>
+      <p class="note">Ingen database ennå: svaret lagres bare i din nettleser og vises på dashboardet her.</p>
+    </form>
+  </main>
+
+  <script src="data.js"></script>
+  <script>
+    const sel = document.getElementById("navn");
+    PEOPLE.forEach(p => sel.add(new Option(p, p)));
+
+    const qBox = document.getElementById("questions");
+    QUESTIONS.forEach((q, i) => {
+      const div = document.createElement("div");
+      div.className = "q";
+      div.innerHTML = `<div class="tema">${i + 1}. ${q.tema}</div><div class="tekst">${q.tekst}</div>
+        <div class="scale">${SCALE.map((s, v) => `
+          <input type="radio" name="${q.id}" id="${q.id}-${v + 1}" value="${v + 1}" required>
+          <label for="${q.id}-${v + 1}"><b>${v + 1}</b>${s}</label>`).join("")}
+        </div>`;
+      qBox.appendChild(div);
+    });
+
+    const msg = document.getElementById("msg");
+    document.getElementById("form").addEventListener("submit", e => {
+      e.preventDefault();
+      const svar = QUESTIONS.map(q => Number(document.querySelector(`input[name="${q.id}"]:checked`).value));
+      const ok = saveAnswer(sel.value, svar, document.getElementById("kommentar").value.trim());
+      const snitt = (svar.reduce((a, b) => a + b, 0) / svar.length).toFixed(1);
+      msg.innerHTML = ok
+        ? `Takk, ${sel.value}! Snittet ditt er ${snitt}. <a href="dashboard.html">Se dashboardet</a>.`
+        : `Takk, ${sel.value}! (Nettleseren tillater ikke lagring, så svaret vises ikke på dashboardet.)`;
+      msg.classList.add("show");
+      e.target.reset();
+    });
+    document.getElementById("nullstill").addEventListener("click", () => {
+      resetLocal();
+      msg.textContent = "Lokale svar er fjernet. Dashboardet viser nå bare de pregenererte svarene.";
+      msg.classList.add("show");
+    });
+  </script>
+</body>
+</html>
